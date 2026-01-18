@@ -1,4 +1,4 @@
-part of auto_size_text;
+part of 'package:auto_size_text/auto_size_text.dart';
 
 /// Flutter widget that automatically resizes text to fit perfectly within its
 /// bounds.
@@ -13,7 +13,7 @@ class AutoSizeText extends StatefulWidget {
   /// closest enclosing [DefaultTextStyle].
   const AutoSizeText(
     String this.data, {
-    Key? key,
+    super.key,
     this.textKey,
     this.style,
     this.strutStyle,
@@ -29,16 +29,15 @@ class AutoSizeText extends StatefulWidget {
     this.wrapWords = true,
     this.overflow,
     this.overflowReplacement,
-    this.textScaleFactor,
+    this.textScaler,
     this.maxLines,
     this.semanticsLabel,
-  })  : textSpan = null,
-        super(key: key);
+  }) : textSpan = null;
 
   /// Creates a [AutoSizeText] widget with a [TextSpan].
   const AutoSizeText.rich(
     TextSpan this.textSpan, {
-    Key? key,
+    super.key,
     this.textKey,
     this.style,
     this.strutStyle,
@@ -54,11 +53,10 @@ class AutoSizeText extends StatefulWidget {
     this.wrapWords = true,
     this.overflow,
     this.overflowReplacement,
-    this.textScaleFactor,
+    this.textScaler,
     this.maxLines,
     this.semanticsLabel,
-  })  : data = null,
-        super(key: key);
+  }) : data = null;
 
   /// Sets the key for the resulting [Text] widget.
   ///
@@ -176,17 +174,17 @@ class AutoSizeText extends StatefulWidget {
   /// displayed instead.
   final Widget? overflowReplacement;
 
-  /// The number of font pixels for each logical pixel.
+  /// The text scaler to use for scaling text.
   ///
-  /// For example, if the text scale factor is 1.5, text will be 50% larger than
+  /// For example, if the text scaler is 1.5, text will be 50% larger than
   /// the specified font size.
   ///
   /// This property also affects [minFontSize], [maxFontSize] and [presetFontSizes].
   ///
-  /// The value given to the constructor as textScaleFactor. If null, will
-  /// use the [MediaQueryData.textScaleFactor] obtained from the ambient
-  /// [MediaQuery], or 1.0 if there is no [MediaQuery] in scope.
-  final double? textScaleFactor;
+  /// The value given to the constructor as textScaler. If null, will
+  /// use the [MediaQueryData.textScaler] obtained from the ambient
+  /// [MediaQuery], or TextScaler.noScaling if there is no [MediaQuery] in scope.
+  final TextScaler? textScaler;
 
   /// An optional maximum number of lines for the text to span, wrapping if necessary.
   /// If the text exceeds the given number of lines, it will be resized according
@@ -216,7 +214,7 @@ class AutoSizeText extends StatefulWidget {
   final String? semanticsLabel;
 
   @override
-  _AutoSizeTextState createState() => _AutoSizeTextState();
+  State<AutoSizeText> createState() => _AutoSizeTextState();
 }
 
 class _AutoSizeTextState extends State<AutoSizeText> {
@@ -242,11 +240,13 @@ class _AutoSizeTextState extends State<AutoSizeText> {
     return LayoutBuilder(builder: (context, size) {
       final defaultTextStyle = DefaultTextStyle.of(context);
 
-      var style = widget.style;
+      TextStyle style;
       if (widget.style == null || widget.style!.inherit) {
         style = defaultTextStyle.style.merge(widget.style);
+      } else {
+        style = widget.style!;
       }
-      if (style!.fontSize == null) {
+      if (style.fontSize == null) {
         style = style.copyWith(fontSize: AutoSizeText._defaultFontSize);
       }
 
@@ -305,8 +305,8 @@ class _AutoSizeTextState extends State<AutoSizeText> {
     }
   }
 
-  List _calculateFontSize(
-      BoxConstraints size, TextStyle? style, int? maxLines) {
+  List<Object> _calculateFontSize(
+      BoxConstraints size, TextStyle style, int? maxLines) {
     final span = TextSpan(
       style: widget.textSpan?.style ?? style,
       text: widget.textSpan?.text ?? widget.data,
@@ -314,19 +314,18 @@ class _AutoSizeTextState extends State<AutoSizeText> {
       recognizer: widget.textSpan?.recognizer,
     );
 
-    final userScale =
-        widget.textScaleFactor ?? MediaQuery.textScaleFactorOf(context);
+    final userScaler = widget.textScaler ?? MediaQuery.textScalerOf(context);
 
     int left;
     int right;
 
     final presetFontSizes = widget.presetFontSizes?.reversed.toList();
     if (presetFontSizes == null) {
-      final num defaultFontSize =
-          style!.fontSize!.clamp(widget.minFontSize, widget.maxFontSize);
-      final defaultScale = defaultFontSize * userScale / style.fontSize!;
+      final double defaultFontSize =
+          style.fontSize!.clamp(widget.minFontSize, widget.maxFontSize);
+      final defaultScale = userScaler.scale(defaultFontSize) / style.fontSize!;
       if (_checkTextFits(span, defaultScale, maxLines, size)) {
-        return <Object>[defaultFontSize * userScale, true];
+        return <Object>[userScaler.scale(defaultFontSize), true];
       }
 
       left = (widget.minFontSize / widget.stepGranularity).floor();
@@ -341,9 +340,10 @@ class _AutoSizeTextState extends State<AutoSizeText> {
       final mid = (left + (right - left) / 2).floor();
       double scale;
       if (presetFontSizes == null) {
-        scale = mid * userScale * widget.stepGranularity / style!.fontSize!;
+        final fontSize = mid * widget.stepGranularity;
+        scale = userScaler.scale(fontSize) / style.fontSize!;
       } else {
-        scale = presetFontSizes[mid] * userScale / style!.fontSize!;
+        scale = userScaler.scale(presetFontSizes[mid]) / style.fontSize!;
       }
       if (_checkTextFits(span, scale, maxLines, size)) {
         left = mid + 1;
@@ -359,9 +359,13 @@ class _AutoSizeTextState extends State<AutoSizeText> {
 
     double fontSize;
     if (presetFontSizes == null) {
-      fontSize = right * userScale * widget.stepGranularity;
+      // Ensure right is not negative (shouldn't happen, but safety check)
+      final clampedRight = right < 0 ? 0 : right;
+      fontSize = userScaler.scale(clampedRight * widget.stepGranularity);
     } else {
-      fontSize = presetFontSizes[right] * userScale;
+      // Clamp right to valid index range to prevent out-of-bounds access
+      final clampedIndex = right.clamp(0, presetFontSizes.length - 1);
+      fontSize = userScaler.scale(presetFontSizes[clampedIndex]);
     }
 
     return <Object>[fontSize, lastValueFits];
@@ -379,13 +383,16 @@ class _AutoSizeTextState extends State<AutoSizeText> {
         ),
         textAlign: widget.textAlign ?? TextAlign.left,
         textDirection: widget.textDirection ?? TextDirection.ltr,
-        textScaleFactor: scale,
+        textScaler: TextScaler.linear(scale),
         maxLines: words.length,
         locale: widget.locale,
         strutStyle: widget.strutStyle,
       );
 
-      wordWrapTextPainter.layout(maxWidth: constraints.maxWidth);
+      wordWrapTextPainter.layout(
+        minWidth: 0.0,
+        maxWidth: constraints.maxWidth,
+      );
 
       if (wordWrapTextPainter.didExceedMaxLines ||
           wordWrapTextPainter.width > constraints.maxWidth) {
@@ -397,13 +404,16 @@ class _AutoSizeTextState extends State<AutoSizeText> {
       text: text,
       textAlign: widget.textAlign ?? TextAlign.left,
       textDirection: widget.textDirection ?? TextDirection.ltr,
-      textScaleFactor: scale,
+      textScaler: TextScaler.linear(scale),
       maxLines: maxLines,
       locale: widget.locale,
       strutStyle: widget.strutStyle,
     );
 
-    textPainter.layout(maxWidth: constraints.maxWidth);
+    textPainter.layout(
+      minWidth: 0.0,
+      maxWidth: constraints.maxWidth,
+    );
 
     return !(textPainter.didExceedMaxLines ||
         textPainter.height > constraints.maxHeight ||
@@ -422,7 +432,7 @@ class _AutoSizeTextState extends State<AutoSizeText> {
         locale: widget.locale,
         softWrap: widget.softWrap,
         overflow: widget.overflow,
-        textScaleFactor: 1,
+        textScaler: TextScaler.noScaling,
         maxLines: maxLines,
         semanticsLabel: widget.semanticsLabel,
       );
@@ -437,7 +447,7 @@ class _AutoSizeTextState extends State<AutoSizeText> {
         locale: widget.locale,
         softWrap: widget.softWrap,
         overflow: widget.overflow,
-        textScaleFactor: fontSize / style.fontSize!,
+        textScaler: TextScaler.linear(fontSize / style.fontSize!),
         maxLines: maxLines,
         semanticsLabel: widget.semanticsLabel,
       );

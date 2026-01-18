@@ -1,4 +1,4 @@
-part of auto_size_text;
+part of 'package:auto_size_text/auto_size_text.dart';
 
 /// Controller to synchronize the fontSize of multiple AutoSizeTexts.
 class AutoSizeGroup {
@@ -46,7 +46,23 @@ class AutoSizeGroup {
   }
 
   void _remove(_AutoSizeTextState text) {
-    _updateFontSize(text, double.infinity);
+    final wasMinimum = _listeners[text] == _fontSize;
     _listeners.remove(text);
+    
+    // If the removed text had the minimum fontSize, recalculate the minimum
+    if (wasMinimum && _listeners.isNotEmpty) {
+      final oldFontSize = _fontSize;
+      _fontSize = double.infinity;
+      for (final size in _listeners.values) {
+        if (size < _fontSize) {
+          _fontSize = size;
+        }
+      }
+      
+      if (oldFontSize != _fontSize) {
+        _widgetsNotified = false;
+        scheduleMicrotask(_notifyListeners);
+      }
+    }
   }
 }
