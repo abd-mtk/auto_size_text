@@ -16,7 +16,6 @@ class AutoSizeText extends StatefulWidget {
     super.key,
     this.textKey,
     this.style,
-    this.styleInherit,
     this.strutStyle,
     this.minFontSize = 12,
     this.maxFontSize = double.infinity,
@@ -41,7 +40,6 @@ class AutoSizeText extends StatefulWidget {
     super.key,
     this.textKey,
     this.style,
-    this.styleInherit,
     this.strutStyle,
     this.minFontSize = 12,
     this.maxFontSize = double.infinity,
@@ -81,16 +79,6 @@ class AutoSizeText extends StatefulWidget {
   /// the closest enclosing [DefaultTextStyle]. Otherwise, the style will
   /// replace the closest enclosing [DefaultTextStyle].
   final TextStyle? style;
-
-  /// Whether the text style should inherit from the closest enclosing
-  /// [DefaultTextStyle].
-  ///
-  /// If null, the inherit value from [style] will be used. If [style] is null,
-  /// this defaults to true.
-  ///
-  /// Setting this explicitly can help avoid TextStyle interpolation errors
-  /// when using [AnimatedDefaultTextStyle] or similar widgets.
-  final bool? styleInherit;
 
   // The default font size if none is specified.
   static const double _defaultFontSize = 14;
@@ -253,22 +241,11 @@ class _AutoSizeTextState extends State<AutoSizeText> {
       final defaultTextStyle = DefaultTextStyle.of(context);
 
       TextStyle style;
-      // Determine inherit value: use styleInherit parameter if provided,
-      // otherwise fall back to style.inherit, or default to true if style is null
-      final shouldInherit =
-          widget.styleInherit ?? widget.style?.inherit ?? true;
-
-      if (widget.style == null || shouldInherit) {
+      if (widget.style == null || widget.style!.inherit) {
         style = defaultTextStyle.style.merge(widget.style);
       } else {
         style = widget.style!;
       }
-
-      // Ensure the inherit value matches what was requested
-      if (widget.styleInherit != null && style.inherit != widget.styleInherit) {
-        style = style.copyWith(inherit: widget.styleInherit);
-      }
-
       if (style.fontSize == null) {
         style = style.copyWith(fontSize: AutoSizeText._defaultFontSize);
       }
@@ -444,16 +421,11 @@ class _AutoSizeTextState extends State<AutoSizeText> {
   }
 
   Widget _buildText(double fontSize, TextStyle style, int? maxLines) {
-    // Ensure the final style has the correct inherit value
-    final finalStyle = widget.styleInherit != null
-        ? style.copyWith(fontSize: fontSize, inherit: widget.styleInherit)
-        : style.copyWith(fontSize: fontSize);
-
     if (widget.data != null) {
       return Text(
         widget.data!,
         key: widget.textKey,
-        style: finalStyle,
+        style: style.copyWith(fontSize: fontSize),
         strutStyle: widget.strutStyle,
         textAlign: widget.textAlign,
         textDirection: widget.textDirection,
@@ -465,15 +437,10 @@ class _AutoSizeTextState extends State<AutoSizeText> {
         semanticsLabel: widget.semanticsLabel,
       );
     } else {
-      // For Text.rich, we need to ensure the style has the correct inherit value
-      final richStyle = widget.styleInherit != null
-          ? style.copyWith(inherit: widget.styleInherit)
-          : style;
-
       return Text.rich(
         widget.textSpan!,
         key: widget.textKey,
-        style: richStyle,
+        style: style,
         strutStyle: widget.strutStyle,
         textAlign: widget.textAlign,
         textDirection: widget.textDirection,
